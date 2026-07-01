@@ -7,18 +7,17 @@ typedef struct {
     const char *name;
     float min;
     float max;
-    const char *unit;
     lv_color_t bg_color;
     lv_color_t needle_color;
 } gauge_cfg_t;
 
 static gauge_cfg_t gauges[] = {
-    {"Boost",            0.0f,   1.5f,   "bar", lv_color_black(), lv_palette_main(LV_PALETTE_RED)},
-    {"Oil Temp",         0.0f,   140.0f, "°C",  lv_color_black(), lv_palette_main(LV_PALETTE_ORANGE)},
-    {"Water Temp",       0.0f,   140.0f, "°C",  lv_color_black(), lv_palette_main(LV_PALETTE_BLUE)},
-    {"IAT",             -20.0f,  100.0f, "°C",  lv_color_black(), lv_palette_main(LV_PALETTE_GREEN)},
-    {"Oil Pressure",     0.0f,   7.0f,   "bar", lv_color_black(), lv_palette_main(LV_PALETTE_PURPLE)},
-    {"RPM",              0.0f,   8000.0f,"rpm", lv_color_black(), lv_palette_main(LV_PALETTE_RED)}
+    {"Boost",            0.0f,   1.5f,   lv_color_black(), lv_palette_main(LV_PALETTE_RED)},
+    {"Oil Temp",         0.0f,   140.0f, lv_color_black(), lv_palette_main(LV_PALETTE_ORANGE)},
+    {"Water Temp",       0.0f,   140.0f, lv_color_black(), lv_palette_main(LV_PALETTE_BLUE)},
+    {"IAT",             -20.0f,  100.0f, lv_color_black(), lv_palette_main(LV_PALETTE_GREEN)},
+    {"Oil Pressure",     0.0f,   7.0f,   lv_color_black(), lv_palette_main(LV_PALETTE_PURPLE)},
+    {"RPM",              0.0f,   8000.0f,lv_color_black(), lv_palette_main(LV_PALETTE_RED)}
 };
 
 static uint8_t current_gauge = 0;
@@ -56,15 +55,10 @@ static void create_gauge_screen(uint8_t idx) {
                                                             cfg->needle_color, 0);
     needles[idx] = needle;
 
-    // Title
+    // Title (bez jednostki)
     lv_obj_t *label = lv_label_create(scr);
     lv_label_set_text_fmt(label, "%s", cfg->name);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
-
-    // Unit
-    lv_obj_t *unit = lv_label_create(scr);
-    lv_label_set_text_fmt(unit, "%s", cfg->unit);
-    lv_obj_align(unit, LV_ALIGN_BOTTOM_MID, 0, -10);
 
     // Aktualna wartość (tekst)
     lv_obj_t *val_lbl = lv_label_create(scr);
@@ -95,16 +89,35 @@ static void load_gauge(uint8_t idx, lv_scr_load_anim_t anim) {
     lv_scr_load_anim(screen_objs[idx], anim, 300, 0, false);
 }
 
-static void swipe_next(void) {
-    uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
-    uint8_t next = (current_gauge + 1) % count;
-    load_gauge(next, LV_SCR_LOAD_ANIM_MOVE_LEFT);
-}
+// Swipe detekcja (prosta, na podstawie indewu pointer)
+static lv_indev_t *pointer_indev = NULL;
+static lv_point_t last_touch;
+static bool last_pressed = false;
 
-static void swipe_prev(void) {
-    uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
-    uint8_t prev = (current_gauge + count - 1) % count;
-    load_gauge(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+static void swipe_process(void) {
+    if(pointer_indev == NULL) return;
+
+    lv_indev_data_t data;
+    lv_indev_read(pointer_indev, &data);
+
+    if(data.state == LV_INDEV_STATE_PRESSED && !last_pressed) {
+        last_touch = data.point;
+        last_pressed = true;
+    } else if(data.state == LV_INDEV_STATE_RELEASED && last_pressed) {
+        int dx = data.point.x - last_touch.x;
+        if(dx > 40) {
+            // swipe w prawo -> poprzedni ekran
+            uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
+            uint8_t prev = (current_gauge + count - 1) % count;
+            load_gauge(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+        } else if(dx < -40) {
+            // swipe w lewo -> następny ekran
+            uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
+            uint8_t next = (current_gauge + 1) % count;
+            load_gauge(next, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+        }
+        last_pressed = false;
+    }
 }
 
 // Prosta generacja wartości demo (później zastąpisz ESP‑NOW)
@@ -130,6 +143,9 @@ void setup()
   Serial.begin(115200);
   scr_lvgl_init();
 
+  // znajdź pointer indev (touch)
+  pointer_indev = lv_indev_get_next(NULL);
+
   build_all_screens();
   load_gauge(0, LV_SCR_LOAD_ANIM_NONE);
 }
@@ -138,5 +154,6 @@ void loop()
 {
   lv_timer_handler();
   demo_update_values();
+  swipe_process();
   vTaskDelay(20);
 }
