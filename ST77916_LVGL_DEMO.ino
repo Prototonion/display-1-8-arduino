@@ -28,6 +28,7 @@ static lv_obj_t *screen_objs[sizeof(gauges)/sizeof(gauges[0])];
 static lv_obj_t *value_labels[sizeof(gauges)/sizeof(gauges[0])];
 static lv_meter_indicator_t *needles[sizeof(gauges)/sizeof(gauges[0])];
 static lv_meter_scale_t *scales[sizeof(gauges)/sizeof(gauges[0])];
+static lv_obj_t *meters[sizeof(gauges)/sizeof(gauges[0])];
 
 static void create_gauge_screen(uint8_t idx) {
     gauge_cfg_t *cfg = &gauges[idx];
@@ -39,6 +40,7 @@ static void create_gauge_screen(uint8_t idx) {
     lv_obj_t *meter = lv_meter_create(scr);
     lv_obj_set_size(meter, 340, 340);   // prawie cały 360x360, zostawia margines
     lv_obj_center(meter);
+    meters[idx] = meter;
 
     lv_meter_scale_t *scale = lv_meter_add_scale(meter);
     scales[idx] = scale;
@@ -69,6 +71,9 @@ static void create_gauge_screen(uint8_t idx) {
     lv_label_set_text(val_lbl, "---");
     lv_obj_align(val_lbl, LV_ALIGN_CENTER, 0, 90);
     value_labels[idx] = val_lbl;
+
+    // Store screen
+    screen_objs[idx] = scr;
 
     // Początkowa wartość w środku zakresu
     float mid = (cfg->min + cfg->max) * 0.5f;
@@ -114,7 +119,7 @@ static void demo_update_values(void) {
         float phase = (float)((t + i * 50) % 1000) / 1000.0f;
         float value = cfg->min + span * phase;  // prosty przebieg w zakresie min..max
 
-        lv_meter_set_indicator_value(lv_obj_get_child(screen_objs[i], 0), needles[i], (int)value);
+        lv_meter_set_indicator_value(meters[i], needles[i], (int)value);
         lv_label_set_text_fmt(value_labels[i], "%0.1f", value);
     }
 }
