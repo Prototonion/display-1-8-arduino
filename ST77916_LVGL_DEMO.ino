@@ -1,6 +1,7 @@
 #include "scr_st77916.h"
 #include <lvgl.h>
 #include <demos/lv_demos.h>
+#include <math.h>
 
 // Gauge configuration
 typedef struct {
@@ -37,7 +38,7 @@ static void create_gauge_screen(uint8_t idx) {
 
     // Full‑screen meter (dial)
     lv_obj_t *meter = lv_meter_create(scr);
-    lv_obj_set_size(meter, 340, 340);   // prawie cały 360x360, zostawia margines
+    lv_obj_set_size(meter, 360, 360);   // pełny ekran 360x360
     lv_obj_center(meter);
     meters[idx] = meter;
 
@@ -47,24 +48,46 @@ static void create_gauge_screen(uint8_t idx) {
     // Skala od 135° do 45° (240° łuku)
     lv_meter_set_scale_range(meter, scale, (int)cfg->min, (int)cfg->max, 240, 135);
     lv_meter_set_scale_ticks(meter, scale, 41, 2, 10, lv_palette_darken(LV_PALETTE_GREY, 2));
-    lv_meter_set_scale_major_ticks(meter, scale, 9, 4, 20,
-                                  lv_palette_darken(LV_PALETTE_GREY, 1), 10);
+    // Nie używamy wbudowanych napisów na podziałkach, rysujemy własne etykiety
 
     // Wskazówka 3px szerokości
     lv_meter_indicator_t *needle = lv_meter_add_needle_line(meter, scale, 3,
                                                             cfg->needle_color, 0);
     needles[idx] = needle;
 
-    // Title (bez jednostki)
-    lv_obj_t *label = lv_label_create(scr);
-    lv_label_set_text_fmt(label, "%s", cfg->name);
-    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
-
     // Aktualna wartość (tekst)
     lv_obj_t *val_lbl = lv_label_create(scr);
     lv_label_set_text(val_lbl, "---");
     lv_obj_align(val_lbl, LV_ALIGN_CENTER, 0, 90);
     value_labels[idx] = val_lbl;
+
+    // Cyfry przy podziałkach – własne etykiety
+    const int label_cnt = 9;   // 9 głównych wartości na łuku
+    const float angle_start = 135.0f;
+    const float angle_range = 240.0f;
+    const float radius = 150.0f;
+    const int cx = 180;
+    const int cy = 180;
+
+    for(int i = 0; i < label_cnt; i++) {
+        float v = cfg->min + (cfg->max - cfg->min) * (float)i / (float)(label_cnt - 1);
+        float angle_deg = angle_start + (v - cfg->min) * angle_range / (cfg->max - cfg->min);
+        float rad = angle_deg * 3.14159265f / 180.0f;
+        int x = cx + (int)(radius * cosf(rad));
+        int y = cy + (int)(radius * sinf(rad));
+
+        int display_val;
+        if(idx == 5) {
+            // RPM – skala x1000
+            display_val = (int)(v / 1000.0f);
+        } else {
+            display_val = (int)v;
+        }
+
+        lv_obj_t *lbl = lv_label_create(scr);
+        lv_label_set_text_fmt(lbl, "%d", display_val);
+        lv_obj_set_pos(lbl, x, y);
+    }
 
     // Store screen
     screen_objs[idx] = scr;
@@ -73,6 +96,9 @@ static void create_gauge_screen(uint8_t idx) {
     float mid = (cfg->min + cfg->max) * 0.5f;
     lv_meter_set_indicator_value(meter, needle, (int)mid);
     lv_label_set_text_fmt(val_lbl, "%0.1f", mid);
+
+    // Gesty na tym ekranie
+    lv_obj_add_event_cb(scr, scr_event_cb, LV_EVENT_GESTURE, NULL);
 }
 
 static void build_all_screens(void) {
@@ -130,9 +156,6 @@ void setup()
 
   build_all_screens();
   load_gauge(0, LV_SCR_LOAD_ANIM_NONE);
-
-  // obsługa gestów swipe na aktywnym ekranie
-  lv_obj_add_event_cb(lv_scr_act(), scr_event_cb, LV_EVENT_GESTURE, NULL);
 }
 
 void loop()
