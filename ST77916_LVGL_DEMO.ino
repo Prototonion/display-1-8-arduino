@@ -30,6 +30,24 @@ static lv_meter_indicator_t *needles[sizeof(gauges)/sizeof(gauges[0])];
 static lv_meter_scale_t *scales[sizeof(gauges)/sizeof(gauges[0])];
 static lv_obj_t *meters[sizeof(gauges)/sizeof(gauges[0])];
 
+// Gesture callback oparty na LV_EVENT_GESTURE
+static void scr_event_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_GESTURE) {
+        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+        uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
+        if(dir == LV_DIR_LEFT) {
+            uint8_t next = (current_gauge + 1) % count;
+            current_gauge = next;
+            lv_scr_load(screen_objs[next]);   // bez animacji, płynne przełączenie
+        } else if(dir == LV_DIR_RIGHT) {
+            uint8_t prev = (current_gauge + count - 1) % count;
+            current_gauge = prev;
+            lv_scr_load(screen_objs[prev]);   // bez animacji
+        }
+    }
+}
+
 static void create_gauge_screen(uint8_t idx) {
     gauge_cfg_t *cfg = &gauges[idx];
     lv_obj_t *scr = lv_obj_create(NULL);
@@ -48,7 +66,6 @@ static void create_gauge_screen(uint8_t idx) {
     // Skala od 135° do 45° (240° łuku)
     lv_meter_set_scale_range(meter, scale, (int)cfg->min, (int)cfg->max, 240, 135);
     lv_meter_set_scale_ticks(meter, scale, 41, 2, 10, lv_palette_darken(LV_PALETTE_GREY, 2));
-    // Nie używamy wbudowanych napisów na podziałkach, rysujemy własne etykiety
 
     // Wskazówka 3px szerokości
     lv_meter_indicator_t *needle = lv_meter_add_needle_line(meter, scale, 3,
@@ -61,11 +78,11 @@ static void create_gauge_screen(uint8_t idx) {
     lv_obj_align(val_lbl, LV_ALIGN_CENTER, 0, 90);
     value_labels[idx] = val_lbl;
 
-    // Cyfry przy podziałkach – własne etykiety
-    const int label_cnt = 9;   // 9 głównych wartości na łuku
+    // Cyfry przy podziałkach – własne etykiety, mniej gęste i poza łukiem
+    const int label_cnt = 7;   // mniej wartości, mniejsze ryzyko nachodzenia
     const float angle_start = 135.0f;
     const float angle_range = 240.0f;
-    const float radius = 150.0f;
+    const float radius = 175.0f;  // trochę poza łukiem skali
     const int cx = 180;
     const int cy = 180;
 
@@ -108,29 +125,6 @@ static void build_all_screens(void) {
     }
 }
 
-static void load_gauge(uint8_t idx, lv_scr_load_anim_t anim) {
-    uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
-    if(idx >= count) return;
-    current_gauge = idx;
-    lv_scr_load_anim(screen_objs[idx], anim, 300, 0, false);
-}
-
-// Gesture callback oparty na LV_EVENT_GESTURE
-static void scr_event_cb(lv_event_t * e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    if(code == LV_EVENT_GESTURE) {
-        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
-        uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
-        if(dir == LV_DIR_LEFT) {
-            uint8_t next = (current_gauge + 1) % count;
-            load_gauge(next, LV_SCR_LOAD_ANIM_MOVE_LEFT);
-        } else if(dir == LV_DIR_RIGHT) {
-            uint8_t prev = (current_gauge + count - 1) % count;
-            load_gauge(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
-        }
-    }
-}
-
 // Prosta generacja wartości demo (później zastąpisz ESP‑NOW)
 static void demo_update_values(void) {
     uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
@@ -155,7 +149,8 @@ void setup()
   scr_lvgl_init();
 
   build_all_screens();
-  load_gauge(0, LV_SCR_LOAD_ANIM_NONE);
+  current_gauge = 0;
+  lv_scr_load(screen_objs[0]);   // bez animacji, jak w prostych przykładach LVGL
 }
 
 void loop()
