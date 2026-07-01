@@ -89,34 +89,19 @@ static void load_gauge(uint8_t idx, lv_scr_load_anim_t anim) {
     lv_scr_load_anim(screen_objs[idx], anim, 300, 0, false);
 }
 
-// Swipe detekcja (prosta, na podstawie indewu pointer)
-static lv_indev_t *pointer_indev = NULL;
-static lv_point_t last_touch;
-static bool last_pressed = false;
-
-static void swipe_process(void) {
-    if(pointer_indev == NULL) return;
-
-    lv_indev_data_t data;
-    lv_indev_read(pointer_indev, &data);
-
-    if(data.state == LV_INDEV_STATE_PRESSED && !last_pressed) {
-        last_touch = data.point;
-        last_pressed = true;
-    } else if(data.state == LV_INDEV_STATE_RELEASED && last_pressed) {
-        int dx = data.point.x - last_touch.x;
-        if(dx > 40) {
-            // swipe w prawo -> poprzedni ekran
-            uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
-            uint8_t prev = (current_gauge + count - 1) % count;
-            load_gauge(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
-        } else if(dx < -40) {
-            // swipe w lewo -> następny ekran
-            uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
+// Gesture callback oparty na LV_EVENT_GESTURE
+static void scr_event_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_GESTURE) {
+        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+        uint8_t count = sizeof(gauges)/sizeof(gauges[0]);
+        if(dir == LV_DIR_LEFT) {
             uint8_t next = (current_gauge + 1) % count;
             load_gauge(next, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+        } else if(dir == LV_DIR_RIGHT) {
+            uint8_t prev = (current_gauge + count - 1) % count;
+            load_gauge(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
         }
-        last_pressed = false;
     }
 }
 
@@ -143,17 +128,16 @@ void setup()
   Serial.begin(115200);
   scr_lvgl_init();
 
-  // znajdź pointer indev (touch)
-  pointer_indev = lv_indev_get_next(NULL);
-
   build_all_screens();
   load_gauge(0, LV_SCR_LOAD_ANIM_NONE);
+
+  // obsługa gestów swipe na aktywnym ekranie
+  lv_obj_add_event_cb(lv_scr_act(), scr_event_cb, LV_EVENT_GESTURE, NULL);
 }
 
 void loop()
 {
   lv_timer_handler();
   demo_update_values();
-  swipe_process();
   vTaskDelay(20);
 }
