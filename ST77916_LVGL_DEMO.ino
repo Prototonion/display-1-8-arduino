@@ -45,20 +45,9 @@ static void create_gauge_screen(uint8_t idx) {
 
     // Skala od 135° do 45° (240° łuku)
     lv_meter_set_scale_range(meter, scale, (int)cfg->min, (int)cfg->max, 240, 135);
-    lv_meter_set_scale_ticks(meter, scale, 13, 2, 15, lv_palette_darken(LV_PALETTE_GREY, 2));
-
-    // Numery przy podziałkach (13 głównych wartości)
-    for(int i = 0; i < 13; i++) {
-        int v = (int)(cfg->min + (cfg->max - cfg->min) * ((float)i / 12.0f));
-        lv_meter_indicator_t *tick = lv_meter_add_scale_lines(meter, scale,
-                                                              lv_palette_darken(LV_PALETTE_GREY, 1), 3,
-                                                              lv_palette_darken(LV_PALETTE_GREY, 1), 15);
-        LV_UNUSED(tick);
-        lv_obj_t *lbl = lv_label_create(meter);
-        lv_label_set_text_fmt(lbl, "%d", v);
-        // LVGL sam ustawi pozycję na podstawie wartości przy użyciu helpera
-        lv_meter_set_indicator_value(meter, tick, v);
-    }
+    lv_meter_set_scale_ticks(meter, scale, 41, 2, 10, lv_palette_darken(LV_PALETTE_GREY, 2));
+    lv_meter_set_scale_major_ticks(meter, scale, 9, 4, 20,
+                                  lv_palette_darken(LV_PALETTE_GREY, 1), 10);
 
     // Wskazówka 3px szerokości
     lv_meter_indicator_t *needle = lv_meter_add_needle_line(meter, scale, 3,
@@ -77,12 +66,9 @@ static void create_gauge_screen(uint8_t idx) {
 
     // Aktualna wartość (tekst)
     lv_obj_t *val_lbl = lv_label_create(scr);
-    lv_label_set_text("---");
+    lv_label_set_text(val_lbl, "---");
     lv_obj_align(val_lbl, LV_ALIGN_CENTER, 0, 90);
     value_labels[idx] = val_lbl;
-
-    // Store screen
-    screen_objs[idx] = scr;
 
     // Początkowa wartość w środku zakresu
     float mid = (cfg->min + cfg->max) * 0.5f;
@@ -125,12 +111,10 @@ static void demo_update_values(void) {
     for(uint8_t i = 0; i < count; i++) {
         gauge_cfg_t *cfg = &gauges[i];
         float span = cfg->max - cfg->min;
-        // Sinusoidalne wypełnienie zakresu 0..1
         float phase = (float)((t + i * 50) % 1000) / 1000.0f;
-        float value = cfg->min + span * (0.5f + 0.5f * lv_trigo_sin((int16_t)(phase * 360.0f)) / 32767.0f);
+        float value = cfg->min + span * phase;  // prosty przebieg w zakresie min..max
 
-        // Podstaw do wskazówki i tekstu (docelowo tu wejdą zmienne z ESP‑NOW)
-        lv_meter_set_indicator_value((lv_obj_t *)lv_obj_get_parent(value_labels[i]), needles[i], (int)value);
+        lv_meter_set_indicator_value(lv_obj_get_child(screen_objs[i], 0), needles[i], (int)value);
         lv_label_set_text_fmt(value_labels[i], "%0.1f", value);
     }
 }
